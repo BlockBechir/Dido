@@ -1,0 +1,2 @@
+# Dido
+Symbolic math calculator
