@@ -78,7 +78,7 @@ The **Examples** menu has ready-made sheets for linear algebra, polynomials, and
 
 ## How it works
 
-Dido started as a Python library, [`python/linear_algebra_1_1_1.py`](python/linear_algebra_1_1_1.py). It is a from-scratch computer algebra system with exact integers and rationals, Gaussian complex numbers, radicals and algebraic numbers, univariate and multivariate polynomials, rational functions, and vectors and matrices.
+Dido started as a Python library, [`python/linear_algebra_1_1_1.py`](python/engine.py). It is a from-scratch computer algebra system with exact integers and rationals, Gaussian complex numbers, radicals and algebraic numbers, univariate and multivariate polynomials, rational functions, and vectors and matrices.
 
 The web app runs a **JavaScript port of that library's design** (`js/engine.js`), so the site opens instantly and works offline:
 
@@ -94,7 +94,6 @@ The web app runs a **JavaScript port of that library's design** (`js/engine.js`)
 | `lagrange` | `lagrange` | exact interpolation over symbols, fractions and complex numbers |
 
 On top of the engine sit a parser for typed maths, and an evaluator that works out which lines depend on which, so the order of lines doesn't matter.
-[`python/CHANGES.md`](python/CHANGES.md) lists the bug fixes made to the Python library while building Dido.
 
 ## Project structure
 
