@@ -3,6 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" type="image/png" sizes="32x32" href="favicon.svg">
 <script>
 /* iOS zooms the page when a text field gains focus; on iOS only, stop that auto-zoom (pinch-zoom still works there) */
 (function () { try {
@@ -2977,7 +2979,7 @@ try { v3 = JSON.parse(load('dido.sheet.v3') || 'null'); v2 = JSON.parse(load('di
 if (v3 && Array.isArray(v3.lines) && v3.lines.length) { matStore = Object.assign({}, v3.mats || {}); loadLines(v3.lines); }
 else if (Array.isArray(v2) && v2.length) loadLines(v2);
 else if (Array.isArray(v1) && v1.length) loadLines(v1.map(toMQ));
-else loadLines(EXAMPLES.tour.lines.map(toMQ));
+else loadLines(['']);
 if (!hasKatex()) window.addEventListener('load', () => { if (hasKatex()) { rows.forEach((r) => r.querySelectorAll('*').forEach((el) => { el._tex = null; })); recompute(); } });
 })();
 </script>
