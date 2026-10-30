@@ -711,6 +711,40 @@ aside { border-left: 1px solid var(--line); background: var(--surface); display:
 .keys { display: grid; grid-template-columns: auto 1fr; gap: 6px 12px; font-size: 13px; color: var(--muted); }
 .keys kbd { font-family: var(--font-mono); font-size: 11.5px; border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 5px; padding: 1px 6px; background: var(--surface); color: var(--ink); white-space: nowrap; }
 
+/* ---------- on-screen keypad (touch devices) ---------- */
+.keypad {
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 40; background: var(--surface); border-top: 1px solid var(--line);
+  box-shadow: 0 -8px 24px rgba(0, 0, 0, .12); padding: 8px 8px calc(8px + env(safe-area-inset-bottom));
+  transform: translateY(105%); transition: transform .2s ease; touch-action: manipulation; user-select: none; -webkit-user-select: none;
+}
+.keypad.open { transform: none; }
+.kp-top { display: flex; justify-content: space-between; align-items: center; padding: 0 4px 6px; font-size: 12px; color: var(--muted); }
+.kp-top button { border: 0; background: none; color: var(--muted); padding: 4px 8px; border-radius: 6px; font-weight: 600; font-size: 12.5px; }
+.kp-panel { display: none; grid-template-columns: repeat(9, 1fr); gap: 6px; max-width: 640px; margin: 0 auto; }
+.kp-panel.on { display: grid; }
+.kp-panel.abc { grid-template-columns: repeat(20, 1fr); }
+.kp-panel.abc .k { grid-column: span 2; }
+.kp-panel.abc .k.w3 { grid-column: span 3; }
+.kp-panel.abc .k.w5 { grid-column: span 5; }
+.k sup { font-size: .7em; vertical-align: .55em; line-height: 0; }
+.kp-panel.abc .k.pad { grid-column: span 1; visibility: hidden; }
+.kp-panel.fn { grid-template-columns: repeat(4, 1fr); }
+.k {
+  height: 44px; border: 0; border-radius: 9px; background: var(--surface-2); color: var(--ink); font: 500 18px KaTeX_Main, "Times New Roman", serif;
+  box-shadow: inset 0 0 0 1px var(--line); display: grid; place-items: center; padding: 0; touch-action: manipulation;
+}
+.k.num { background: var(--surface); font-family: var(--font-body); font-weight: 600; font-size: 18px; }
+.k.op { background: var(--accent-soft); color: var(--accent); }
+.k.ctl { font-family: var(--font-body); font-size: 14px; font-weight: 700; color: var(--muted); }
+.k.go { background: var(--accent); color: var(--accent-ink); box-shadow: none; grid-column: span 2; font-family: var(--font-body); font-size: 20px; }
+.k.fnk { font-family: var(--font-body); font-size: 14px; font-weight: 600; }
+.k.on { background: var(--accent); color: var(--accent-ink); }
+.k.pressed { filter: brightness(.9); transform: scale(.97); }
+.k i { font-style: italic; font-family: KaTeX_Math, serif; }
+.k svg { width: 20px; height: 20px; }
+body.kp-open { padding-bottom: 280px; }
+body.kp-open .toast { bottom: 270px; }
+
 /* ---------- toast ---------- */
 .toast {
   position: fixed; left: 50%; bottom: 22px; transform: translateX(-50%) translateY(20px); opacity: 0; pointer-events: none;
@@ -783,7 +817,7 @@ aside { border-left: 1px solid var(--line); background: var(--surface); display:
     <div class="sheet-inner">
       <div class="sheet-head">
         <h1>Sheet</h1>
-        <div class="hint"><kbd>Enter</kbd> new line · <kbd>Alt</kbd>+<kbd>↑</kbd><kbd>↓</kbd> move line · drag the number to reorder</div>
+        <div class="hint" id="desk-hint"><kbd>Enter</kbd> new line · <kbd>Alt</kbd>+<kbd>↑</kbd><kbd>↓</kbd> move line · drag the number to reorder</div>
       </div>
       <div class="list" id="list"></div>
       <div class="sheet-foot">
@@ -804,6 +838,8 @@ aside { border-left: 1px solid var(--line); background: var(--surface); display:
     <div class="panel" id="panel-ref" role="tabpanel" aria-labelledby="tab-ref" hidden></div>
   </aside>
 </main>
+
+<div class="keypad" id="keypad" aria-label="Maths keypad"><div class="kp-top"><span id="kp-hint">Tap ← → to leave a power or fraction</span><button id="kp-hide" type="button">Hide ▾</button></div><div id="kp-body"></div></div>
 
 <div class="toast" id="toast" role="status" aria-live="polite"><span id="toast-msg"></span><button id="toast-undo" hidden>Undo</button></div>
 
@@ -2367,6 +2403,9 @@ MQ.registerEmbed('matrix', (id) => {
   if (!matStore[id]) matStore[id] = { rows: emptyCells(2, 2) };
   return { htmlString: `<span class="dmx" data-mid="${id}"></span>`, text: () => 'matrix', latex: () => `\\embed{matrix}[${id}]` };
 });
+const TOUCH = (window.matchMedia && matchMedia('(hover: none) and (pointer: coarse)').matches) ||
+  /Android|iPhone|iPad|iPod/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+let activeMF = null;
 const MQ_CONFIG = {
   spaceBehavesLikeTab: false,
   leftRightIntoCmdGoes: 'up',
@@ -2376,6 +2415,14 @@ const MQ_CONFIG = {
   charsThatBreakOutOfSupSub: '+-=<>,;)]',
   autoSubscriptNumerals: false,
   autoCommands: 'pi sqrt nthroot alpha beta gamma delta epsilon theta kappa lambda mu rho sigma tau phi chi psi omega Gamma Delta Theta Lambda Sigma Phi Psi Omega',
+  substituteTextarea: () => {
+    // on touch screens the Dido keypad replaces the phone keyboard (inputmode="none"); hardware keyboards still work
+    const t = document.createElement('textarea');
+    ['autocapitalize', 'autocomplete', 'autocorrect'].forEach((a) => t.setAttribute(a, 'off'));
+    t.setAttribute('spellcheck', 'false');
+    if (TOUCH) t.setAttribute('inputmode', 'none');
+    return t;
+  },
   autoOperatorNames: 'det inv rank rref kernel image charpoly minor identity zeros diag transpose trace nullspace colspace issymmetric isantisymmetric isdiagonal istriangular issquare conj abs factor isprime primes gcd lcm quo coeff lagrange polyroots expand numer denom approx simplify cbrt root dot dim deg'
 };
 const $ = (s, el = document) => el.querySelector(s);
@@ -2582,7 +2629,7 @@ function makeRow(line) {
   row._mf = mf;
   mountMatrices(row);
   row.classList.toggle('is-empty', !line.latex);
-  fieldEl.addEventListener('focusin', () => { editingId = line.id; lastInputId = line.id; select(line.id); row.classList.add('editing'); });
+  fieldEl.addEventListener('focusin', (e) => { if (!e.target.closest('.dmx')) activeMF = mf; editingId = line.id; lastInputId = line.id; select(line.id); row.classList.add('editing'); });
   fieldEl.addEventListener('focusout', () => {
     setTimeout(() => { if (!fieldEl.contains(document.activeElement)) { row.classList.remove('editing'); if (editingId === line.id) editingId = null; } }, 0);
   });
@@ -2760,6 +2807,7 @@ function buildGrid(row, el) {
       } }));
       f.latex(M.rows[r][c] || '');
       quiet = false;
+      span.addEventListener('focusin', () => { activeMF = f; });
       span.addEventListener('keydown', (e) => { if (e.key === 'Tab') { e.preventDefault(); e.stopPropagation(); stepCell(row, el, r, c, e.shiftKey ? -1 : 1); } }, true);
       el._fields[r].push(f);
     }
@@ -2805,6 +2853,84 @@ function insertMatrix(mf, row) {
   mf.write(`\\embed{matrix}[${id}]`);
   mountMatrices(row); focusCell(row, id, 0, 0);
 }
+
+/* ---------- on-screen keypad ---------- */
+const kp = (() => {
+  const pad = $('#keypad'), body = $('#kp-body');
+  const mf = () => activeMF;
+  const T = (s) => () => mf().typedText(s);
+  const C = (c) => () => mf().cmd(c);
+  const K = (k) => () => mf().keystroke(k);
+  const fnIns = (name) => () => { const builtin = ['det', 'deg', 'dim', 'gcd'].includes(name); mf().write((builtin ? '\\' + name : '\\operatorname{' + name + '}') + '\\left(\\right)'); mf().keystroke('Left'); show('main'); };
+  const MATRIX_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M7 4H4v16h3M17 4h3v16h-3"/><circle cx="9.5" cy="9" r="1" fill="currentColor"/><circle cx="14.5" cy="9" r="1" fill="currentColor"/><circle cx="9.5" cy="15" r="1" fill="currentColor"/><circle cx="14.5" cy="15" r="1" fill="currentColor"/></svg>';
+  const main = [
+    ['<i>x</i>', T('x')], ['<i>y</i>', T('y')], ['<i>a</i>²', () => { mf().typedText('^2'); mf().keystroke('Right'); }], ['<i>a</i><sup><i>b</i></sup>', T('^')],
+    ['7', T('7'), 'num'], ['8', T('8'), 'num'], ['9', T('9'), 'num'], ['÷', T('/'), 'op'], ['⌫', K('Backspace'), 'ctl'],
+    ['(', T('(')], [')', T(')')], ['√', C('\\sqrt')], ['ⁿ√', C('\\nthroot')],
+    ['4', T('4'), 'num'], ['5', T('5'), 'num'], ['6', T('6'), 'num'], ['×', T('*'), 'op'], ['←', K('Left'), 'ctl'],
+    ['<i>i</i>', T('i')], ['π', C('\\pi')], [',', T(',')], ['=', T('=')],
+    ['1', T('1'), 'num'], ['2', T('2'), 'num'], ['3', T('3'), 'num'], ['−', T('-'), 'op'], ['→', K('Right'), 'ctl'],
+    ['ABC', () => show('abc'), 'ctl'], ['f(x)', () => show('fn'), 'ctl'], [MATRIX_ICON, () => { const row = mf().el && mf().el().closest('.row'); insertMatrix(mf(), row || rows.get(editingId)); }],
+    ['[ ]', T('[')], ['0', T('0'), 'num'], ['.', T('.'), 'num'], ['+', T('+'), 'op'], ['↵', T('\n'), 'go']
+  ];
+  let shift = false;
+  const letter = (ch) => () => { mf().typedText(shift ? ch.toUpperCase() : ch); if (shift) { shift = false; build('abc'); } };
+  const abcRows = ['qwertyuiop', 'asdfghjkl', 'zxcvbnm'];
+  function abcKeys() {
+    const ks = [];
+    abcRows[0].split('').forEach((c) => ks.push([shift ? c.toUpperCase() : c, letter(c)]));
+    ks.push(['', null, 'pad']); abcRows[1].split('').forEach((c) => ks.push([shift ? c.toUpperCase() : c, letter(c)])); ks.push(['', null, 'pad']);
+    ks.push(['⇧', () => { shift = !shift; build('abc'); }, 'ctl w3' + (shift ? ' on' : '')]);
+    abcRows[2].split('').forEach((c) => ks.push([shift ? c.toUpperCase() : c, letter(c)]));
+    ks.push(['⌫', K('Backspace'), 'ctl w3']);
+    ks.push(['123', () => show('main'), 'ctl w3'], ['_', T('_'), 'ctl'], ['θ', C('\\theta')], ['λ', C('\\lambda')], ['α', C('\\alpha')],
+      ['←', K('Left'), 'ctl'], ['→', K('Right'), 'ctl'], ['↵', T('\n'), 'go w5']);
+    return ks;
+  }
+  const FNS = ['det', 'inv', 'transpose', 'tr', 'rank', 'rref', 'kernel', 'image', 'charpoly', 'dot', 'minor', 'identity',
+    'gcd', 'quo', 'rem', 'deg', 'coeff', 'lagrange', 'polyroots', 'factor', 'abs', 'conj', 'cbrt', 'approx'];
+  function build(name) {
+    let keys, cls = name;
+    if (name === 'main') keys = main;
+    else if (name === 'abc') keys = abcKeys();
+    else keys = FNS.map((f) => [f, fnIns(f), 'fnk']).concat([['123', () => show('main'), 'ctl'], ['ABC', () => show('abc'), 'ctl']]);
+    body.innerHTML = '';
+    const panel = document.createElement('div'); panel.className = 'kp-panel on ' + cls;
+    keys.forEach(([label, act, kc]) => {
+      const b = document.createElement('button'); b.type = 'button'; b.tabIndex = -1; b.className = 'k ' + (kc || '');
+      b.innerHTML = '<span>' + label + '</span>';
+      if (act) b.addEventListener('pointerdown', (e) => {
+        e.preventDefault();
+        if (!activeMF) return;
+        lastKeyAt = Date.now();
+        b.classList.add('pressed'); setTimeout(() => b.classList.remove('pressed'), 120);
+        try { act(); } catch (err) { /* ignore a key that does not apply here */ }
+      });
+      panel.appendChild(b);
+    });
+    body.appendChild(panel);
+  }
+  function show(name) { build(name); }
+  ['mousedown', 'touchstart'].forEach((ev) => pad.addEventListener(ev, (e) => e.preventDefault(), { passive: false }));
+  // a key can change the keypad's size; swallow the tap's follow-up click so it never lands on the page behind
+  let lastKeyAt = 0;
+  document.addEventListener('click', (e) => { if (Date.now() - lastKeyAt < 600 && !pad.contains(e.target)) { e.preventDefault(); e.stopPropagation(); } }, true);
+  $('#kp-hide').addEventListener('pointerdown', (e) => { e.preventDefault(); if (activeMF) activeMF.blur(); close(); });
+  function open() {
+    if (!TOUCH) return;
+    pad.classList.add('open'); document.body.classList.add('kp-open');
+    requestAnimationFrame(() => {
+      const row = editingId && rows.get(editingId); if (!row) return;
+      const r = row.getBoundingClientRect(), limit = window.innerHeight - pad.offsetHeight - 12;
+      if (r.bottom > limit) window.scrollBy({ top: r.bottom - limit, behavior: 'smooth' });
+    });
+  }
+  function close() { pad.classList.remove('open'); document.body.classList.remove('kp-open'); }
+  build('main');
+  document.addEventListener('focusin', (e) => { if (e.target.closest && e.target.closest('.mq')) open(); });
+  document.addEventListener('focusout', () => setTimeout(() => { const a = document.activeElement; if (!(a && a.closest && a.closest('.mq'))) close(); }, 50));
+  return { open, close };
+})();
 
 /* ---------- inspector ---------- */
 function kindChip(r) {
